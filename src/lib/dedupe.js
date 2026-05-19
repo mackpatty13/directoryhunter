@@ -54,10 +54,14 @@ export function canonicalNiche(rawName) {
 }
 
 const REVENUE_PATTERNS = [
-  /\$\s?([\d,]+(?:\.\d+)?)\s?k\s?(?:\/|\s+per\s+)?(?:mo|month|m)\b/i,
-  /\$\s?([\d,]+(?:\.\d+)?)\s?(?:\/|\s+per\s+)?(?:mo|month|m)\b/i,
+  // "$3.4k/mo", "$3.4k per month", "$3.4k p/mo"
+  /\$\s?([\d,]+(?:\.\d+)?)\s?k\s?(?:\/|\s+per\s+|p\/)?(?:mo|month|m)\b/i,
+  // "$3,400/mo", "$3,400 per month", "$3,400 p/mo" (Flippa profit line)
+  /\$\s?([\d,]+(?:\.\d+)?)\s?(?:\/|\s+per\s+|p\/|\s+p\/)(?:mo|month|m)\b/i,
+  // "$3,400 MRR" or "$3,400 monthly revenue"
   /\$\s?([\d,]+(?:\.\d+)?)\s?(?:mrr|monthly\s+revenue)/i,
-  /(?:mrr|monthly\s+revenue)[:\s]+\$?\s?([\d,]+(?:\.\d+)?)\s?k?\b/i
+  // "MRR: $3,400" or "Net Profit USD $3,400" or similar prefix forms
+  /(?:mrr|monthly\s+revenue|net\s+profit|gross\s+revenue)[:\s]+(?:-?\s?USD\s*)?\$?\s?([\d,]+(?:\.\d+)?)\s?k?\b/i
 ];
 
 export function parseRevenueUsdMonthly(text) {
