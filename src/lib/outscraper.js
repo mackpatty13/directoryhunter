@@ -50,7 +50,19 @@ async function pollResult(requestId, { maxWaitMs = 120000, intervalMs = 4000 } =
       throw new Error(`outscraper poll failed: ${res.status} ${body.slice(0, 200)}`);
     }
     const json = await res.json();
-    if (json.status === 'Success') return json.data;
+    if (json.status === 'Success') {
+      // When the payload is large, Outscraper returns `data` as a download URL
+      // instead of inline. Fetch and parse it so callers always get the array.
+      if (typeof json.data === 'string' && /^https?:\/\//i.test(json.data)) {
+        const dl = await fetch(json.data);
+        if (!dl.ok) {
+          const t = await dl.text();
+          throw new Error(`outscraper data download failed: ${dl.status} ${t.slice(0, 200)}`);
+        }
+        return await dl.json();
+      }
+      return json.data;
+    }
     if (json.status === 'Failed') throw new Error(`outscraper request failed: ${JSON.stringify(json).slice(0, 200)}`);
     await new Promise(r => setTimeout(r, intervalMs));
   }

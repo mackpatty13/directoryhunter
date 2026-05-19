@@ -22,6 +22,25 @@ function baseUrl() {
     : 'https://api.dataforseo.com/v3';
 }
 
+// DataforSEO `location_name` expects "City,Country" or "City,FullState,Country".
+// Our normalize step emits "Dallas, TX" style strings; the API rejects abbreviated
+// states with the comma-space layout, so we drop the state and use "City,Country".
+const COUNTRY_NAMES = {
+  US: 'United States',
+  CA: 'Canada',
+  GB: 'United Kingdom',
+  AU: 'Australia',
+  IE: 'Ireland',
+  NZ: 'New Zealand'
+};
+
+export function formatLocation(cityName, countryCode = 'US') {
+  const code = (countryCode || 'US').toString().toUpperCase();
+  const country = COUNTRY_NAMES[code] || 'United States';
+  const city = (cityName || '').toString().split(',')[0].trim();
+  return city ? `${city},${country}` : country;
+}
+
 function authHeader() {
   const { login, password } = creds();
   return 'Basic ' + Buffer.from(`${login}:${password}`).toString('base64');

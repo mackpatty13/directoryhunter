@@ -176,9 +176,12 @@ export async function updateCandidateStatus(id, status) {
 
 // ----- Evaluation helpers -----
 
-// Creates a pending evaluation row. If one already exists for the same
-// (niche, metro) and is not failed, returns the existing one (24h cache via
-// unique index). Returns the row.
+// Creates a pending evaluation row. If a non-failed row already exists for the
+// same (niche, metro), returns it (enforced by the unique partial index on
+// `where status != 'failed'`). The 24h paid-API cache lives at the
+// dh_evaluation_data level (saveEvaluationData / cachedOrFetch in evaluate.js),
+// not here, so re-submitting an old eval re-runs scoring against cached source
+// data and rewrites dimension scores + plan in place.
 export async function createEvaluation({ niche, metro, candidateId = null }) {
   const supabase = db();
   const lowerNiche = niche.trim().toLowerCase();

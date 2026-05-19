@@ -17,7 +17,7 @@
 import { log } from './log.js';
 import { normalize } from './normalize.js';
 import { fetchGoogleMapsBusinesses } from './outscraper.js';
-import { fetchSerpResults, fetchKeywordVolume } from './dataforseo.js';
+import { fetchSerpResults, fetchKeywordVolume, formatLocation } from './dataforseo.js';
 import { fetchTrends } from './trends.js';
 import { scoreEvaluation } from './score-evaluation.js';
 import { generatePlan } from './plan.js';
@@ -80,9 +80,7 @@ export async function runEvaluation(evaluation) {
     const variations = normalized.keyword_variations.length > 0
       ? normalized.keyword_variations.slice(0, 5)
       : [normalized.primary_keyword];
-    const primaryLocation = sampleCities[0]
-      ? `${sampleCities[0]},${normalized.country_code === 'US' ? 'United States' : ''}`.replace(/,$/, '')
-      : 'United States';
+    const primaryLocation = formatLocation(sampleCities[0], normalized.country_code);
 
     const serps = await cachedOrFetch(evalId, 'dataforseo-serp', async () => {
       const out = [];

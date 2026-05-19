@@ -26,9 +26,10 @@ export async function evaluateCandidate(formData) {
   const niche = candidate.niche_canonical || candidate.niche_raw;
 
   const evaluation = await createEvaluation({ niche, metro, candidateId });
-  if (evaluation.status !== 'complete') {
-    await runEvaluation(evaluation);
-  }
+  // Always re-run on submit. cachedOrFetch inside runEvaluation enforces a 24h
+  // per-source cache on dh_evaluation_data, so re-runs within 24h cost nothing
+  // beyond Sonnet scoring and dimension/plan rewrites.
+  await runEvaluation(evaluation);
   revalidatePath('/');
   revalidatePath(`/candidates/${candidateId}`);
   revalidatePath('/evaluations');
@@ -42,9 +43,8 @@ export async function evaluateManual(formData) {
   if (!niche || !metro) throw new Error('niche and metro are required');
 
   const evaluation = await createEvaluation({ niche, metro });
-  if (evaluation.status !== 'complete') {
-    await runEvaluation(evaluation);
-  }
+  // Always re-run on submit (see evaluateCandidate for cache rationale).
+  await runEvaluation(evaluation);
   revalidatePath('/evaluations');
   redirect(`/evaluations/${evaluation.id}`);
 }
