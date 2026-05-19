@@ -62,3 +62,38 @@ export async function markSourceScanned(sourceId) {
     .eq('id', sourceId);
   if (error) throw new Error(`markSourceScanned(${sourceId}) failed: ${error.message}`);
 }
+
+// Returns { sourceId: 'Display Name', ... } for prompt building.
+let _sourcesMap = null;
+export async function getSourcesMap() {
+  if (_sourcesMap) return _sourcesMap;
+  const supabase = db();
+  const { data, error } = await supabase.from(T.sources).select('id, name');
+  if (error) throw new Error(`getSourcesMap failed: ${error.message}`);
+  _sourcesMap = Object.fromEntries(data.map(s => [s.id, s.name]));
+  return _sourcesMap;
+}
+
+// Candidates that have not yet been scored. Ordered newest first so the
+// scoring pass works on whatever the latest scan produced.
+export async function fetchUnscoredCandidates({ limit = 100 } = {}) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.candidates)
+    .select('id, source_id, niche_raw, geographic_hint, revenue_signal, revenue_amount_usd_monthly, raw_context, discovery_category')
+    .is('scored_at', null)
+    .order('found_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`fetchUnscoredCandidates failed: ${error.message}`);
+  return data;
+}
+
+// Writes scoring output back to a single candidate row.
+export async function updateCandidateScore(id, fields) {
+  const supabase = db();
+  const { error } = await supabase
+    .from(T.candidates)
+    .update({ ...fields, scored_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`updateCandidateScore(${id}) failed: ${error.message}`);
+}

@@ -121,7 +121,9 @@ export async function scan({ limit = 100, headless = true } = {}) {
           description,
           flippa_profit_line: profit.raw,
           location: geo
-        }
+        },
+        // Marketplace listings are validated by real prior sales.
+        discovery_category: 'proven_winner'
       });
 
       if (candidates.length >= limit) break;

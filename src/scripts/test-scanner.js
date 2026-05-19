@@ -1,11 +1,12 @@
-// Run a single scanner and print the first N results. Does not write to the DB.
+// Run a single scanner and print the first N results.
 // Usage:
 //   npm run test:scanner -- flippa
 //   npm run test:scanner -- flippa --headed         # show the browser window
 //   npm run test:scanner -- flippa --limit=25
-//   npm run test:scanner -- flippa --store          # Phase 2+: also write rows
+//   npm run test:scanner -- flippa --store          # also insert into dh_niche_candidates
 
 import { log } from '../lib/log.js';
+import { upsertCandidates, markSourceScanned } from '../lib/db.js';
 
 const args = process.argv.slice(2);
 const scannerName = args.find(a => !a.startsWith('--'));
@@ -67,7 +68,14 @@ if (results.length === 0) {
 }
 
 if (store) {
-  log.warn('--store flag is not wired yet, it lands in Phase 2');
+  if (results.length === 0) {
+    log.warn('--store: nothing to insert');
+  } else {
+    const sourceId = results[0]?.source_id;
+    const { inserted, conflicts } = await upsertCandidates(results);
+    log.info('--store: upsert complete', { inserted, conflicts, total: results.length });
+    if (sourceId) await markSourceScanned(sourceId);
+  }
 }
 
 process.exit(0);

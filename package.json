@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:scanner": "node --env-file-if-exists=.env.local src/scripts/test-scanner.js"
+    "test:scanner": "node --env-file-if-exists=.env.local src/scripts/test-scanner.js",
+    "score:discovery": "node --env-file=.env.local src/scripts/run-discovery-scoring.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.1",
