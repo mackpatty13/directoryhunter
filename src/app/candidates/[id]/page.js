@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getCandidateById, getSourcesMap } from '../../../lib/db.js';
 import { ScoreBadge, CategoryChip, StatusChip } from '../../../components/ScoreBadge.jsx';
 import { StatusActions } from '../../../components/StatusActions.jsx';
+import { evaluateCandidate } from '../../actions.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,9 +92,31 @@ export default async function CandidateDetail({ params }) {
             <StatusActions id={row.id} status={row.status} sourceUrl={row.source_url} compact />
           </Block>
           <Block title="evaluate">
-            <Link href="#" aria-disabled className="mono block text-xs px-2 py-1.5 border border-ink-600 text-ink-500 text-center cursor-not-allowed">
-              evaluate (phase 5)
-            </Link>
+            {row.evaluation_id ? (
+              <Link href={`/evaluations/${row.evaluation_id}`}
+                className="mono block text-xs px-2 py-1.5 border border-emerald-500 text-emerald-300 bg-emerald-900/20 hover:bg-emerald-900/40 text-center">
+                open evaluation →
+              </Link>
+            ) : (
+              <form action={evaluateCandidate} className="space-y-2">
+                <input type="hidden" name="candidate_id" value={row.id} />
+                <input
+                  type="text"
+                  name="metro"
+                  required
+                  placeholder={row.geographic_hint || 'metro (e.g. DFW, national)'}
+                  defaultValue={row.geographic_hint || ''}
+                  className="mono w-full bg-ink-900 border border-ink-600 px-2 py-1.5 text-xs text-ink-100 focus:border-ink-300 focus:outline-none"
+                />
+                <button type="submit"
+                  className="mono w-full text-xs px-2 py-1.5 border border-emerald-500 text-emerald-300 bg-emerald-900/20 hover:bg-emerald-900/40">
+                  run evaluation
+                </button>
+                <p className="mono text-[10px] text-ink-500 leading-tight">
+                  30 to 90 seconds. uses outscraper + dataforseo + trends + sonnet.
+                </p>
+              </form>
+            )}
           </Block>
         </aside>
       </section>

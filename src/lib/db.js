@@ -174,6 +174,172 @@ export async function updateCandidateStatus(id, status) {
   if (error) throw new Error(`updateCandidateStatus(${id}, ${status}) failed: ${error.message}`);
 }
 
+// ----- Evaluation helpers -----
+
+// Creates a pending evaluation row. If one already exists for the same
+// (niche, metro) and is not failed, returns the existing one (24h cache via
+// unique index). Returns the row.
+export async function createEvaluation({ niche, metro, candidateId = null }) {
+  const supabase = db();
+  const lowerNiche = niche.trim().toLowerCase();
+  const lowerMetro = metro.trim().toLowerCase();
+
+  const { data: existing, error: lookupErr } = await supabase
+    .from(T.evaluations)
+    .select('*')
+    .ilike('niche', niche.trim())
+    .ilike('metro', metro.trim())
+    .neq('status', 'failed')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lookupErr) throw new Error(`createEvaluation lookup failed: ${lookupErr.message}`);
+  if (existing) return existing;
+
+  const { data, error } = await supabase
+    .from(T.evaluations)
+    .insert({
+      niche: niche.trim(),
+      metro: metro.trim(),
+      candidate_id: candidateId,
+      status: 'pending'
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(`createEvaluation insert failed: ${error.message}`);
+  return data;
+}
+
+export async function getEvaluation(id) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.evaluations)
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`getEvaluation(${id}) failed: ${error.message}`);
+  return data;
+}
+
+export async function listEvaluations({ limit = 100 } = {}) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.evaluations)
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`listEvaluations failed: ${error.message}`);
+  return data ?? [];
+}
+
+export async function updateEvaluation(id, fields) {
+  const supabase = db();
+  const { error } = await supabase
+    .from(T.evaluations)
+    .update(fields)
+    .eq('id', id);
+  if (error) throw new Error(`updateEvaluation(${id}) failed: ${error.message}`);
+}
+
+export async function getEvaluationData(evaluationId, source = null) {
+  const supabase = db();
+  let q = supabase.from(T.evaluation_data).select('*').eq('evaluation_id', evaluationId);
+  if (source) q = q.eq('source', source);
+  const { data, error } = await q;
+  if (error) throw new Error(`getEvaluationData failed: ${error.message}`);
+  return data ?? [];
+}
+
+// Insert a payload (Outscraper / DataforSEO / Trends). Skips if same source
+// already saved fresh data within freshHours.
+export async function saveEvaluationData(evaluationId, source, payload, { freshHours = 24 } = {}) {
+  const supabase = db();
+  const cutoff = new Date(Date.now() - freshHours * 3600 * 1000).toISOString();
+  const { data: existing } = await supabase
+    .from(T.evaluation_data)
+    .select('id, fetched_at')
+    .eq('evaluation_id', evaluationId)
+    .eq('source', source)
+    .gte('fetched_at', cutoff)
+    .limit(1);
+  if (existing && existing.length > 0) return { reused: true, id: existing[0].id };
+
+  const { data, error } = await supabase
+    .from(T.evaluation_data)
+    .insert({ evaluation_id: evaluationId, source, payload })
+    .select('id')
+    .single();
+  if (error) throw new Error(`saveEvaluationData(${source}) failed: ${error.message}`);
+  return { reused: false, id: data.id };
+}
+
+export async function saveDimensionScores(evaluationId, scores) {
+  if (!scores || scores.length === 0) return;
+  const supabase = db();
+  const rows = scores.map(s => ({
+    evaluation_id: evaluationId,
+    dimension: s.dimension,
+    score: s.score,
+    max_score: s.max_score,
+    reasoning: s.reasoning,
+    evidence: s.evidence ?? null
+  }));
+  await supabase.from(T.dimension_scores).delete().eq('evaluation_id', evaluationId);
+  const { error } = await supabase.from(T.dimension_scores).insert(rows);
+  if (error) throw new Error(`saveDimensionScores failed: ${error.message}`);
+}
+
+export async function getDimensionScores(evaluationId) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.dimension_scores)
+    .select('*')
+    .eq('evaluation_id', evaluationId);
+  if (error) throw new Error(`getDimensionScores failed: ${error.message}`);
+  return data ?? [];
+}
+
+export async function saveBuildPlan(evaluationId, plan) {
+  const supabase = db();
+  const row = {
+    evaluation_id: evaluationId,
+    recommended_model: plan.recommended_model,
+    target_metros: plan.target_metros ?? [],
+    primary_keywords: plan.primary_keywords ?? [],
+    secondary_keywords: plan.secondary_keywords ?? [],
+    top_competitors: plan.top_competitors ?? [],
+    estimated_revenue_low: plan.estimated_revenue_low_monthly_12mo ?? null,
+    estimated_revenue_high: plan.estimated_revenue_high_monthly_12mo ?? null,
+    revenue_basis: plan.revenue_basis ?? null,
+    first_30_days_plan: plan.first_30_days_plan ?? null,
+    stop_signs: plan.stop_signs ?? []
+  };
+  // Upsert: there's a UNIQUE(evaluation_id) on dh_build_plans.
+  const { error } = await supabase.from(T.build_plans).upsert(row, { onConflict: 'evaluation_id' });
+  if (error) throw new Error(`saveBuildPlan failed: ${error.message}`);
+}
+
+export async function getBuildPlan(evaluationId) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.build_plans)
+    .select('*')
+    .eq('evaluation_id', evaluationId)
+    .maybeSingle();
+  if (error) throw new Error(`getBuildPlan failed: ${error.message}`);
+  return data;
+}
+
+// Mark candidate as queued / evaluated once an eval finishes successfully.
+export async function linkCandidateEvaluation(candidateId, evaluationId, status = 'evaluated') {
+  if (!candidateId) return;
+  const supabase = db();
+  await supabase
+    .from(T.candidates)
+    .update({ evaluation_id: evaluationId, status })
+    .eq('id', candidateId);
+}
+
 // Aggregates for the FilterBar dropdowns.
 export async function getCandidateFacets() {
   const supabase = db();
