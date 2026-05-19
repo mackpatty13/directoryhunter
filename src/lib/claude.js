@@ -32,9 +32,15 @@ function extractText(message) {
 }
 
 function tryParseJson(text) {
-  // Strip any markdown fences then parse. Models occasionally wrap JSON.
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const body = fenced ? fenced[1] : text;
+  // Strip any markdown fences then parse. Models occasionally wrap JSON, and
+  // sometimes the response is truncated before the closing fence.
+  let body = text.trim();
+  const fenced = body.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fenced) {
+    body = fenced[1];
+  } else if (body.startsWith('```')) {
+    body = body.replace(/^```(?:json)?\s*/i, '');
+  }
   return JSON.parse(body);
 }
 
