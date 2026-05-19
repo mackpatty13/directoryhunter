@@ -1,10 +1,31 @@
 -- Directory Hunter initial schema.
 -- Apply manually in the Supabase SQL editor.
+--
+-- All tables are prefixed `dh_` because this Supabase project is shared with
+-- another project (Opportunity Scraper). The prefix guarantees no collisions
+-- now or later. JS code references the prefixed names directly.
+
+-- ---------------------------------------------------------------------------
+-- Cleanup: drop any unprefixed Directory Hunter tables left behind by a
+-- previous partial migration attempt. These names belong only to this project,
+-- so it is safe to drop them. We deliberately do NOT touch `digests` because
+-- the Opportunity Scraper project owns that name in this database.
+-- ---------------------------------------------------------------------------
+
+drop table if exists build_plans cascade;
+drop table if exists dimension_scores cascade;
+drop table if exists evaluation_data cascade;
+drop table if exists evaluations cascade;
+drop table if exists niche_candidates cascade;
+drop table if exists discovery_sources cascade;
+
+-- ---------------------------------------------------------------------------
+-- Schema
+-- ---------------------------------------------------------------------------
 
 create extension if not exists pgcrypto;
 
--- Discovery: where niches come from
-create table discovery_sources (
+create table dh_discovery_sources (
   id text primary key,
   name text not null,
   base_url text not null,
@@ -13,10 +34,9 @@ create table discovery_sources (
   notes text
 );
 
--- Discovery: niche candidates found by scanners
-create table niche_candidates (
+create table dh_niche_candidates (
   id uuid primary key default gen_random_uuid(),
-  source_id text not null references discovery_sources(id),
+  source_id text not null references dh_discovery_sources(id),
   source_url text not null,
   source_url_canonical text not null unique,
   niche_raw text not null,
@@ -29,7 +49,7 @@ create table niche_candidates (
   raw_context text not null,
   raw_payload jsonb not null,
 
-  -- Discovery scoring (lightweight)
+  -- Discovery scoring (lightweight Haiku pass)
   discovery_score int,
   discovery_category text,    -- 'proven_winner', 'revenue_mention', 'opportunity_signal'
   estimated_arpu_usd int,
@@ -41,19 +61,18 @@ create table niche_candidates (
   evaluation_id uuid
 );
 
-create index niche_candidates_score_idx
-  on niche_candidates (discovery_score desc nulls last, found_at desc);
+create index dh_niche_candidates_score_idx
+  on dh_niche_candidates (discovery_score desc nulls last, found_at desc);
 
-create index niche_candidates_canonical_idx
-  on niche_candidates (niche_canonical);
+create index dh_niche_candidates_canonical_idx
+  on dh_niche_candidates (niche_canonical);
 
-create index niche_candidates_status_idx
-  on niche_candidates (status, discovery_score desc nulls last);
+create index dh_niche_candidates_status_idx
+  on dh_niche_candidates (status, discovery_score desc nulls last);
 
--- Deep evaluation
-create table evaluations (
+create table dh_evaluations (
   id uuid primary key default gen_random_uuid(),
-  candidate_id uuid references niche_candidates(id),
+  candidate_id uuid references dh_niche_candidates(id),
   niche text not null,
   metro text not null,
   normalized_niche jsonb,
@@ -66,23 +85,23 @@ create table evaluations (
   completed_at timestamptz
 );
 
-create unique index evaluations_niche_metro_idx
-  on evaluations (lower(niche), lower(metro))
+create unique index dh_evaluations_niche_metro_idx
+  on dh_evaluations (lower(niche), lower(metro))
   where status != 'failed';
 
-create table evaluation_data (
+create table dh_evaluation_data (
   id uuid primary key default gen_random_uuid(),
-  evaluation_id uuid not null references evaluations(id) on delete cascade,
+  evaluation_id uuid not null references dh_evaluations(id) on delete cascade,
   source text not null,    -- 'outscraper', 'dataforseo-serp', 'dataforseo-keywords', 'trends'
   payload jsonb not null,
   fetched_at timestamptz not null default now()
 );
 
-create index evaluation_data_eval_idx on evaluation_data (evaluation_id, source);
+create index dh_evaluation_data_eval_idx on dh_evaluation_data (evaluation_id, source);
 
-create table dimension_scores (
+create table dh_dimension_scores (
   id uuid primary key default gen_random_uuid(),
-  evaluation_id uuid not null references evaluations(id) on delete cascade,
+  evaluation_id uuid not null references dh_evaluations(id) on delete cascade,
   dimension text not null,
   score int not null,
   max_score int not null,
@@ -90,11 +109,11 @@ create table dimension_scores (
   evidence jsonb
 );
 
-create unique index dimension_scores_unique on dimension_scores (evaluation_id, dimension);
+create unique index dh_dimension_scores_unique on dh_dimension_scores (evaluation_id, dimension);
 
-create table build_plans (
+create table dh_build_plans (
   id uuid primary key default gen_random_uuid(),
-  evaluation_id uuid not null references evaluations(id) on delete cascade unique,
+  evaluation_id uuid not null references dh_evaluations(id) on delete cascade unique,
   recommended_model text not null,
   target_metros text[],
   primary_keywords text[],
@@ -108,8 +127,7 @@ create table build_plans (
   generated_at timestamptz not null default now()
 );
 
--- Weekly digest tracking
-create table digests (
+create table dh_digests (
   id uuid primary key default gen_random_uuid(),
   sent_at timestamptz not null default now(),
   candidate_ids uuid[] not null,
@@ -118,8 +136,12 @@ create table digests (
   email_provider_id text
 );
 
--- Seed the source registry. Edit `enabled` to disable a source without code changes.
-insert into discovery_sources (id, name, base_url, enabled) values
+-- ---------------------------------------------------------------------------
+-- Seed the source registry. Toggle `enabled` to disable a source without
+-- touching code.
+-- ---------------------------------------------------------------------------
+
+insert into dh_discovery_sources (id, name, base_url, enabled) values
   ('acquire', 'Acquire.com', 'https://acquire.com', true),
   ('flippa', 'Flippa', 'https://flippa.com', true),
   ('indiehackers', 'Indie Hackers', 'https://www.indiehackers.com', true),

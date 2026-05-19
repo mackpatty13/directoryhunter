@@ -26,6 +26,18 @@ export function db() {
   return _client;
 }
 
+// Table names. All Directory Hunter tables are prefixed `dh_` so the schema
+// can share a Supabase project with other apps without colliding.
+export const T = {
+  sources: 'dh_discovery_sources',
+  candidates: 'dh_niche_candidates',
+  evaluations: 'dh_evaluations',
+  evaluation_data: 'dh_evaluation_data',
+  dimension_scores: 'dh_dimension_scores',
+  build_plans: 'dh_build_plans',
+  digests: 'dh_digests'
+};
+
 // Upsert a batch of candidate rows on source_url_canonical.
 // Returns { inserted, conflicts } counts.
 export async function upsertCandidates(rows) {
@@ -33,7 +45,7 @@ export async function upsertCandidates(rows) {
 
   const supabase = db();
   const { data, error } = await supabase
-    .from('niche_candidates')
+    .from(T.candidates)
     .upsert(rows, { onConflict: 'source_url_canonical', ignoreDuplicates: true })
     .select('id');
 
@@ -45,7 +57,7 @@ export async function upsertCandidates(rows) {
 export async function markSourceScanned(sourceId) {
   const supabase = db();
   const { error } = await supabase
-    .from('discovery_sources')
+    .from(T.sources)
     .update({ last_scanned_at: new Date().toISOString() })
     .eq('id', sourceId);
   if (error) throw new Error(`markSourceScanned(${sourceId}) failed: ${error.message}`);

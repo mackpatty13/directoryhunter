@@ -45,6 +45,12 @@ The canonical spec is `directory-hunter-discovery-kickoff.md` at the repo root. 
 
 Do not start a phase until the previous one is confirmed.
 
+## Database table naming
+
+All Directory Hunter tables are prefixed `dh_` (e.g., `dh_niche_candidates`, `dh_evaluations`, `dh_digests`). This Supabase project is shared with at least one other app (Opportunity Scraper, which owns the unprefixed `digests` and other names). The prefix is non-negotiable: do not add an unprefixed table.
+
+JS code reads table names from `T` exported by `src/lib/db.js`. Use `T.candidates`, `T.sources`, etc., not literal strings, so a future rename is a one-file change.
+
 ## Directory layout
 
 ```
