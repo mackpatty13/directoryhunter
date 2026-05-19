@@ -97,3 +97,97 @@ export async function updateCandidateScore(id, fields) {
     .eq('id', id);
   if (error) throw new Error(`updateCandidateScore(${id}) failed: ${error.message}`);
 }
+
+// ----- UI-facing helpers -----
+
+const ALLOWED_STATUSES = new Set(['new', 'queued_for_eval', 'evaluated', 'archived', 'building']);
+
+// Filters: { status, minScore, source, category, q (search), page, pageSize }
+// Returns { rows, total, page, pageSize, totalPages }.
+export async function listCandidates(filters = {}) {
+  const {
+    status = 'active',
+    minScore = null,
+    source = null,
+    category = null,
+    q = null,
+    page = 1,
+    pageSize = 25
+  } = filters;
+
+  const supabase = db();
+  let query = supabase
+    .from(T.candidates)
+    .select('id, source_id, source_url, niche_raw, niche_canonical, geographic_hint, revenue_signal, revenue_amount_usd_monthly, discovery_score, discovery_category, estimated_arpu_usd, fit_reasoning, status, found_at, scored_at, posted_at', { count: 'exact' });
+
+  if (status === 'active') {
+    query = query.neq('status', 'archived');
+  } else if (status !== 'all') {
+    query = query.eq('status', status);
+  }
+  if (Number.isFinite(minScore)) query = query.gte('discovery_score', minScore);
+  if (source) query = query.eq('source_id', source);
+  if (category) query = query.eq('discovery_category', category);
+  if (q && q.trim()) {
+    const term = q.trim().replace(/[%_]/g, '');
+    query = query.or(`niche_raw.ilike.%${term}%,niche_canonical.ilike.%${term}%,raw_context.ilike.%${term}%`);
+  }
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  query = query
+    .order('discovery_score', { ascending: false, nullsFirst: false })
+    .order('found_at', { ascending: false })
+    .range(from, to);
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(`listCandidates failed: ${error.message}`);
+  return {
+    rows: data ?? [],
+    total: count ?? 0,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / pageSize))
+  };
+}
+
+export async function getCandidateById(id) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.candidates)
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(`getCandidateById(${id}) failed: ${error.message}`);
+  return data;
+}
+
+export async function updateCandidateStatus(id, status) {
+  if (!ALLOWED_STATUSES.has(status)) {
+    throw new Error(`updateCandidateStatus: invalid status '${status}'`);
+  }
+  const supabase = db();
+  const { error } = await supabase
+    .from(T.candidates)
+    .update({ status })
+    .eq('id', id);
+  if (error) throw new Error(`updateCandidateStatus(${id}, ${status}) failed: ${error.message}`);
+}
+
+// Aggregates for the FilterBar dropdowns.
+export async function getCandidateFacets() {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.candidates)
+    .select('source_id, discovery_category, status');
+  if (error) throw new Error(`getCandidateFacets failed: ${error.message}`);
+  const sources = {};
+  const categories = {};
+  const statuses = {};
+  for (const r of data) {
+    if (r.source_id) sources[r.source_id] = (sources[r.source_id] || 0) + 1;
+    if (r.discovery_category) categories[r.discovery_category] = (categories[r.discovery_category] || 0) + 1;
+    if (r.status) statuses[r.status] = (statuses[r.status] || 0) + 1;
+  }
+  return { sources, categories, statuses, total: data.length };
+}
