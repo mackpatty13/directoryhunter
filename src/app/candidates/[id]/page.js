@@ -113,7 +113,7 @@ export default async function CandidateDetail({ params }) {
                   run evaluation
                 </button>
                 <p className="mono text-[10px] text-ink-500 leading-tight">
-                  30 to 90 seconds. uses outscraper + dataforseo + trends + sonnet.
+                  30 to 90 seconds. uses google places + dataforseo + trends + sonnet.
                 </p>
               </form>
             )}

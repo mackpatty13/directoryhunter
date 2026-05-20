@@ -5,7 +5,7 @@
 // Order:
 //   1. normalize  (Claude Sonnet)
 //   2. trends      (free)
-//   3. outscraper  (paid, async, ~$0.30-0.50)
+//   3. google-places  (paid, ~$0.30-0.50, within GCP $200/mo free credit)
 //   4. dataforseo SERP for each keyword variation (paid in live, free sandbox)
 //   5. dataforseo keyword volume (paid in live, free sandbox)
 //   6. score-evaluation (Sonnet)
@@ -16,7 +16,7 @@
 
 import { log } from './log.js';
 import { normalize } from './normalize.js';
-import { fetchGoogleMapsBusinesses } from './outscraper.js';
+import { fetchGoogleMapsBusinesses } from './google-places.js';
 import { fetchSerpResults, fetchKeywordVolume, formatLocation } from './dataforseo.js';
 import { fetchTrends } from './trends.js';
 import { scoreEvaluation } from './score-evaluation.js';
@@ -70,9 +70,9 @@ export async function runEvaluation(evaluation) {
       return fetchTrends(normalized.primary_keyword, { geo: normalized.country_code });
     });
 
-    // 3. Outscraper (paid). Sample top 3 cities.
+    // 3. Google Places (paid). Sample top 3 cities.
     const sampleCities = normalized.cities.slice(0, 3).map(c => c.name);
-    const outscraper = await cachedOrFetch(evalId, 'outscraper', async () => {
+    const places = await cachedOrFetch(evalId, 'google-places', async () => {
       return fetchGoogleMapsBusinesses(normalized.primary_keyword, sampleCities, { limit: 30 });
     });
 
@@ -104,7 +104,7 @@ export async function runEvaluation(evaluation) {
     // 6. Score with Sonnet.
     const scoring = await scoreEvaluation({
       normalized,
-      outscraper,
+      places,
       serps,
       keywordVolumes,
       trends
@@ -118,7 +118,7 @@ export async function runEvaluation(evaluation) {
       plan = await generatePlan({
         normalized,
         scoring,
-        outscraper,
+        places,
         serps,
         keywordVolumes
       });

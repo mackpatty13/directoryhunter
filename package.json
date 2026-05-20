@@ -9,7 +9,9 @@
     "start": "next start",
     "test:scanner": "node --env-file-if-exists=.env.local src/scripts/test-scanner.js",
     "score:discovery": "node --env-file=.env.local src/scripts/run-discovery-scoring.js",
-    "discover": "node --env-file=.env.local src/scripts/run-scanners.js"
+    "discover": "node --env-file=.env.local src/scripts/run-scanners.js",
+    "digest": "node --env-file=.env.local src/scripts/send-digest.js",
+    "eval:pending": "node --env-file=.env.local src/scripts/run-pending-evaluations.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.1",

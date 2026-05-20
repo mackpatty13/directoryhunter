@@ -6,9 +6,9 @@ Not a product. No public auth, no marketing site, no customers.
 
 ## What it does
 
-**Discovery (nightly).** Eight scanners pull candidates from Acquire.com (or Flippa), Indie Hackers, Reddit, Frey Chu's blog and YouTube, Niche Pursuits, Failory, lead-gen pricing pages, and a periodic Outscraper category sweep. Candidates land in `niche_candidates`. Claude Haiku scores them 0-100 with no paid API calls. Top scorers surface in the UI inbox and a Sunday digest email.
+**Discovery (nightly).** Eight scanners pull candidates from Acquire.com (or Flippa), Indie Hackers, Reddit, Frey Chu's blog and YouTube, Niche Pursuits, Failory, lead-gen pricing pages, and a weekly Google Maps category sweep. Candidates land in `niche_candidates`. Claude Haiku scores them 0-100 with no paid API calls. Top scorers surface in the UI inbox and a Sunday digest email.
 
-**Evaluation (on demand).** Click Evaluate on a candidate. Pipeline fans out to Outscraper, DataforSEO, and Google Trends, then Claude Sonnet scores 6 dimensions to 100 and writes a build plan if the score clears 60.
+**Evaluation (on demand).** Click Evaluate on a candidate. Pipeline fans out to Google Places, DataforSEO, and Google Trends, then Claude Sonnet scores 6 dimensions to 100 and writes a build plan if the score clears 60.
 
 The goal: open the tool Monday morning and see fifteen niches worth considering this week, instead of inventing them from scratch.
 
@@ -22,7 +22,7 @@ The goal: open the tool Monday morning and see fifteen niches worth considering 
 - Resend for the Sunday digest (sender: `hunter@buildmyblast.com`)
 - Anthropic: `claude-haiku-4-5-20251001` for bulk classification, `claude-sonnet-4-6` for deep evaluation
 - Playwright for JS-heavy scraping, `cheerio` for HTML parsing
-- Outscraper and DataforSEO (paid, evaluation only)
+- Google Places API and DataforSEO (paid, evaluation only)
 - `google-trends-api` npm package (no key)
 
 ## Local setup
@@ -84,7 +84,7 @@ Built in phases. Each phase stops for review before the next starts.
 3. Remaining scanners.
 4. Discovery UI.
 5. Evaluation pipeline and UI.
-6. Outscraper category sampler, weekly digest email.
+6. Google Maps category sampler, weekly digest email.
 7. Deploy to Vercel and Railway.
 
 ## House rules

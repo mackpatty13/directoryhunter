@@ -44,8 +44,11 @@ export default async function EvaluationDetail({ params }) {
   const dataBySource = {};
   for (const d of allData) dataBySource[d.source] = d.payload;
 
+  const stillRunning = evalRow.status === 'pending' || evalRow.status === 'running';
+
   return (
     <main className="mx-auto max-w-4xl px-4 sm:px-6 py-8 space-y-6">
+      {stillRunning && <meta httpEquiv="refresh" content="5" />}
       <header className="flex items-center justify-between mono text-sm">
         <Link href="/evaluations" className="text-ink-400 hover:text-ink-100">← evaluation history</Link>
         <span className="text-ink-500 truncate max-w-md">{evalRow.id}</span>
@@ -73,13 +76,14 @@ export default async function EvaluationDetail({ params }) {
         </div>
       </section>
 
-      {evalRow.status === 'pending' || evalRow.status === 'running' ? (
-        <div className="border border-amber-500 bg-amber-900/20 p-6 text-center">
+      {stillRunning && (
+        <div className="border border-amber-500 bg-amber-900/20 p-6 text-center space-y-2">
           <p className="text-amber-200 mono text-sm">
-            evaluation is {evalRow.status}. this page does not auto-refresh, hit reload in 30 to 60 seconds.
+            evaluation is {evalRow.status}. the railway worker picks up pending evals roughly once a minute, then takes 30 to 90 seconds to finish.
           </p>
+          <p className="text-amber-200/70 mono text-xs">this page auto-refreshes every 5 seconds.</p>
         </div>
-      ) : null}
+      )}
 
       {evalRow.status === 'failed' && (
         <div className="border border-rose-500 bg-rose-900/20 p-6">

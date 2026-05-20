@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createEvaluation, getCandidateById, updateCandidateStatus } from '../lib/db.js';
-import { runEvaluation } from '../lib/evaluate.js';
 
 export async function setStatus(formData) {
   const id = formData.get('id');
@@ -14,8 +13,10 @@ export async function setStatus(formData) {
 }
 
 // Submitted from the candidate detail page. Picks the niche from the candidate
-// row, accepts the metro from the form, runs the pipeline, redirects to the
-// result page.
+// row, accepts the metro from the form, inserts a pending evaluation row, then
+// redirects to the result page. The Railway worker (src/scripts/run-pending-
+// evaluations.js) actually runs the pipeline. The result page auto-refreshes
+// while status is pending/running.
 export async function evaluateCandidate(formData) {
   const candidateId = formData.get('candidate_id');
   const metro = (formData.get('metro') || '').toString().trim();
@@ -26,10 +27,6 @@ export async function evaluateCandidate(formData) {
   const niche = candidate.niche_canonical || candidate.niche_raw;
 
   const evaluation = await createEvaluation({ niche, metro, candidateId });
-  // Always re-run on submit. cachedOrFetch inside runEvaluation enforces a 24h
-  // per-source cache on dh_evaluation_data, so re-runs within 24h cost nothing
-  // beyond Sonnet scoring and dimension/plan rewrites.
-  await runEvaluation(evaluation);
   revalidatePath('/');
   revalidatePath(`/candidates/${candidateId}`);
   revalidatePath('/evaluations');
@@ -43,8 +40,6 @@ export async function evaluateManual(formData) {
   if (!niche || !metro) throw new Error('niche and metro are required');
 
   const evaluation = await createEvaluation({ niche, metro });
-  // Always re-run on submit (see evaluateCandidate for cache rationale).
-  await runEvaluation(evaluation);
   revalidatePath('/evaluations');
   redirect(`/evaluations/${evaluation.id}`);
 }

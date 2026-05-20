@@ -108,14 +108,14 @@ Seed URLs (verify still live and robots-allowed):
 
 For each, extract niche name, CPL or CPC range, why it is profitable. ARPU is derived from CPL (high CPL implies high ARPU). Each becomes a candidate with `discovery_category = 'opportunity_signal'`.
 
-## 8. Outscraper category sampler (`scanners/outscraper-categories.js`)
+## 8. Google Maps category sampler (`scanners/category-sampler.js`)
 
-The only paid scanner. Runs weekly, not nightly. Budget: $5 to $10 per run.
+The only paid scanner. Uses Google Places API (New). Runs weekly, not nightly. Cost: roughly $90 per full run at limit=50, almost always inside GCP's $200/month free credit.
 
-- Outscraper has roughly 8,000 Google Maps categories.
-- On each run, sample 50 categories not sampled in the last 90 days.
+- Categories live in `data/sampler-categories.json` (currently ~160 Frey-style boring local services). Metros in `data/sampler-metros.json`.
+- On each run, sample up to N categories not sampled in the last 90 days (oldest first). Default `limit=5`; cron passes `--limit=50`.
 - For each, pull 30 businesses across 3 random mid-sized cities.
-- Compute completeness rate (businesses with hours plus website plus 5+ reviews plus photos).
+- Compute completeness rate (businesses with hours plus website plus 5+ reviews plus photos, 4 of 5 signals required).
 - Under 50% completeness, the category becomes a candidate with `discovery_category = 'opportunity_signal'`.
 
 This is the only scanner that surfaces niches no one has named yet.

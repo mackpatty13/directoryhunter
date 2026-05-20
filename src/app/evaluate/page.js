@@ -35,7 +35,7 @@ export default function EvaluatePage() {
             run evaluation
           </button>
           <p className="text-[11px] mono text-ink-500">
-            this submits to Outscraper + DataforSEO + Trends + Sonnet. one run takes 30 to 90 seconds and costs roughly $1 to $3 in paid api spend.
+            this submits to Google Places + DataforSEO + Trends + Sonnet. one run takes 30 to 90 seconds and costs roughly $1 to $3 in paid api spend.
           </p>
         </div>
       </form>

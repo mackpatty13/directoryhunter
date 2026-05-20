@@ -35,7 +35,8 @@ export const T = {
   evaluation_data: 'dh_evaluation_data',
   dimension_scores: 'dh_dimension_scores',
   build_plans: 'dh_build_plans',
-  digests: 'dh_digests'
+  digests: 'dh_digests',
+  category_samples: 'dh_category_samples'
 };
 
 // Upsert a batch of candidate rows on source_url_canonical.
@@ -244,6 +245,33 @@ export async function updateEvaluation(id, fields) {
   if (error) throw new Error(`updateEvaluation(${id}) failed: ${error.message}`);
 }
 
+// Atomically claim the oldest pending evaluation by flipping it from
+// 'pending' to 'running'. Returns the claimed row, or null if nothing pending
+// (or another worker beat us to it). Used by the Railway run-pending-
+// evaluations cron so two concurrent crons never process the same row.
+export async function claimPendingEvaluation() {
+  const supabase = db();
+  const { data: candidate, error: findErr } = await supabase
+    .from(T.evaluations)
+    .select('id')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (findErr) throw new Error(`claimPendingEvaluation find failed: ${findErr.message}`);
+  if (!candidate) return null;
+
+  const { data: claimed, error: claimErr } = await supabase
+    .from(T.evaluations)
+    .update({ status: 'running' })
+    .eq('id', candidate.id)
+    .eq('status', 'pending')
+    .select()
+    .maybeSingle();
+  if (claimErr) throw new Error(`claimPendingEvaluation claim failed: ${claimErr.message}`);
+  return claimed;  // null if the row was already claimed by another worker
+}
+
 export async function getEvaluationData(evaluationId, source = null) {
   const supabase = db();
   let q = supabase.from(T.evaluation_data).select('*').eq('evaluation_id', evaluationId);
@@ -253,7 +281,7 @@ export async function getEvaluationData(evaluationId, source = null) {
   return data ?? [];
 }
 
-// Insert a payload (Outscraper / DataforSEO / Trends). Skips if same source
+// Insert a payload (Google Places / DataforSEO / Trends). Skips if same source
 // already saved fresh data within freshHours.
 export async function saveEvaluationData(evaluationId, source, payload, { freshHours = 24 } = {}) {
   const supabase = db();
@@ -341,6 +369,88 @@ export async function linkCandidateEvaluation(candidateId, evaluationId, status 
     .from(T.candidates)
     .update({ evaluation_id: evaluationId, status })
     .eq('id', candidateId);
+}
+
+// ----- Category sampler helpers -----
+
+// Returns the most recent sampled_at per category, as a Map.
+// Missing categories (never sampled) will be absent from the map.
+export async function getCategoryLastSampled(categories) {
+  if (!Array.isArray(categories) || categories.length === 0) return new Map();
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.category_samples)
+    .select('category, sampled_at')
+    .in('category', categories)
+    .order('sampled_at', { ascending: false });
+  if (error) throw new Error(`getCategoryLastSampled failed: ${error.message}`);
+  const out = new Map();
+  for (const r of data ?? []) {
+    if (!out.has(r.category)) out.set(r.category, r.sampled_at);
+  }
+  return out;
+}
+
+export async function recordCategorySample({ category, sampledMetros, totalBusinesses, avgCompleteness, candidateCreated }) {
+  const supabase = db();
+  const { error } = await supabase
+    .from(T.category_samples)
+    .insert({
+      category,
+      sampled_metros: sampledMetros,
+      total_businesses: totalBusinesses,
+      avg_completeness: avgCompleteness,
+      candidate_created: candidateCreated
+    });
+  if (error) throw new Error(`recordCategorySample(${category}) failed: ${error.message}`);
+}
+
+// ----- Digest helpers -----
+
+// Pull the candidate window for the Sunday digest.
+// Defaults match the spec: discovery_score >= 70, status = 'new',
+// found within the last 7 days, deduped by niche_canonical, top 10.
+export async function fetchDigestCandidates({ minScore = 70, sinceDays = 7, limit = 10 } = {}) {
+  const supabase = db();
+  const since = new Date(Date.now() - sinceDays * 24 * 3600 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from(T.candidates)
+    .select('id, source_id, source_url, niche_raw, niche_canonical, discovery_score, estimated_arpu_usd, fit_reasoning, revenue_signal, found_at')
+    .eq('status', 'new')
+    .gte('discovery_score', minScore)
+    .gte('found_at', since)
+    .order('discovery_score', { ascending: false, nullsFirst: false })
+    .order('found_at', { ascending: false })
+    .limit(limit * 4);
+  if (error) throw new Error(`fetchDigestCandidates failed: ${error.message}`);
+
+  const seen = new Set();
+  const out = [];
+  for (const row of data ?? []) {
+    const key = (row.niche_canonical || row.niche_raw || '').trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export async function recordDigestSent({ candidateIds, subject, bodyMd, providerId }) {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from(T.digests)
+    .insert({
+      candidate_ids: candidateIds,
+      email_subject: subject,
+      email_body_md: bodyMd,
+      email_provider_id: providerId
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(`recordDigestSent failed: ${error.message}`);
+  return data;
 }
 
 // Aggregates for the FilterBar dropdowns.

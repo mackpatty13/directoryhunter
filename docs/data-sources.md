@@ -16,13 +16,15 @@ External services and how this project talks to them.
 - All calls go through `src/lib/claude.js` which exposes `haiku()` and `sonnet()` helpers.
 - Env: `ANTHROPIC_API_KEY`.
 
-## Outscraper (paid)
+## Google Places API (paid)
 
 - Used in Phase 5 evaluation and the Phase 6 weekly category sampler.
-- Endpoint: `https://api.outscraper.cloud`.
-- Async pattern: most queries return a `request_id`, results retrieved by polling.
+- Endpoint: `https://places.googleapis.com/v1/places:searchText` (Places API New, Text Search).
+- Synchronous: one HTTP request per (keyword, city). Paginate via `nextPageToken` (max 20 per page, 3 pages = 60 results).
+- Field mask determines cost SKU. We use Pro SKU ($20 per 1000 results) because we ask for phone, website, hours, and photos.
+- First $200/month of GCP usage is free credit, which covers the full weekly sampler (~$90) and Phase 5 evals comfortably.
 - Cache results in `evaluation_data` keyed by `(niche, metro)` for 24 hours.
-- Env: `OUTSCRAPER_API_KEY`.
+- Env: `GOOGLE_PLACES_API_KEY` (create in Google Cloud console, enable the "Places API (New)" service, restrict the key to that API).
 
 ## DataforSEO (paid)
 
@@ -53,5 +55,5 @@ External services and how this project talks to them.
 
 - Discovery is effectively free (Reddit, sitemaps, Playwright on public pages, Haiku scoring).
 - Evaluation is paid. Budget: $1 to $3 per evaluation. Expected volume: 5 to 10 per week. Monthly: $30 to $100.
-- Outscraper category sampler is paid: $5 to $10 per weekly run.
+- Category sampler is paid Google Places: roughly $90 per full weekly run, almost always inside GCP's $200/month free credit.
 - All paid calls are 24-hour cached so re-runs in the same day cost nothing.

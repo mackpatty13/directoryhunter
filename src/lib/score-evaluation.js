@@ -10,7 +10,7 @@ const SYSTEM = [
   'You return JSON only, no prose, no markdown fencing.'
 ].join(' ');
 
-function buildPrompt({ normalized, outscraper, serps, keywordVolumes, trends }) {
+function buildPrompt({ normalized, places, serps, keywordVolumes, trends }) {
   return `Score this directory-site niche on a 100-point rubric.
 
 Niche: ${normalized.canonical_niche}
@@ -18,8 +18,8 @@ Metro: ${normalized.canonical_metro}
 Primary keyword: ${normalized.primary_keyword}
 Cities sampled: ${normalized.cities.map(c => c.name).join(', ')}
 
------ Outscraper Google Maps data (per city) -----
-${JSON.stringify(outscraper.map(c => ({
+----- Google Maps data (per city) -----
+${JSON.stringify(places.map(c => ({
   city: c.city,
   business_count: c.businesses?.length ?? 0,
   completeness_rate: c.completeness?.rate ?? null,

@@ -31,19 +31,31 @@ The canonical spec is `directory-hunter-discovery-kickoff.md` at the repo root. 
 - Resend for the weekly digest. Sender: `hunter@buildmyblast.com`. Domain already verified.
 - Anthropic: `claude-haiku-4-5-20251001` for bulk classification and Discovery scoring; `claude-sonnet-4-6` for deep evaluation and build-plan generation.
 - Playwright for JS-heavy scraping. `cheerio` for HTML parsing. Built-in `fetch` for plain HTTP (Node 20.6+).
-- `google-trends-api` for Trends. Outscraper for Maps. DataforSEO for SERP and keywords.
+- `google-trends-api` for Trends. Google Places API (New) for Maps. DataforSEO for SERP and keywords.
 
 ## Phase plan
 
-1. Skeleton + DB schema + first scanner + test-scanner script.
-2. Storage wiring + Haiku discovery scoring.
-3. Remaining scanners (reddit, indiehackers, niche-pursuits, failory, frey-chu blog+YouTube, lead-gen-pricing).
-4. Discovery UI (inbox, candidate detail, filters).
-5. Evaluation pipeline + UI (normalize, Outscraper, DataforSEO, Trends, Sonnet scoring, build plan).
-6. Outscraper category sampler + Sunday digest email.
+1. Skeleton + DB schema + first scanner + test-scanner script. **(done)**
+2. Storage wiring + Haiku discovery scoring. **(done)**
+3. Remaining scanners (reddit, indiehackers, niche-pursuits, failory, frey-chu blog+YouTube, lead-gen-pricing). **(done)**
+4. Discovery UI (inbox, candidate detail, filters). **(done)**
+5. Evaluation pipeline + UI (normalize, Google Places, DataforSEO, Trends, Sonnet scoring, build plan). **(done)**
+6. Google Maps category sampler + Sunday digest email.
 7. Deploy to Vercel + Railway cron.
 
 Do not start a phase until the previous one is confirmed.
+
+## Commands
+
+- `npm run dev` — Next dev server
+- `npm run build` / `npm start` — production build and serve
+- `npm run test:scanner -- <name>` — run one scanner and print the first 10. Flags: `--headed` (show browser), `--limit=N`, `--store` (also upsert to DB)
+- `npm run discover` — run all scanners then the Haiku scoring pass. Flags: `--only=flippa`, `--skip=reddit,frey-chu`, `--no-score`, `--limit=N` (passes through to scanners; only meaningful with `--only`)
+- `npm run score:discovery` — score unscored candidates only (no scanning)
+- `npm run digest` — build and send the Sunday digest. Flags: `--dry-run` (print body, no send), `--to=other@example.com` (override recipient)
+- `npm run eval:pending` — claim and run one pending evaluation, then exit. This is what Railway invokes once a minute. Runs nothing if no pending evals.
+
+After `npm install`, also run `npx playwright install chromium`. Apply DB migrations manually in the Supabase SQL editor (`db/migrations/0001_initial.sql`).
 
 ## Database table naming
 
@@ -67,12 +79,56 @@ JS code reads table names from `T` exported by `src/lib/db.js`. Use `T.candidate
 │   └── data-sources.md            # paid API notes, rate limits, costs
 ├── db/migrations/                 # run manually in Supabase SQL editor
 └── src/
-    ├── app/                       # App Router pages and API routes
-    ├── lib/                       # db, http, log, dedupe, claude, ...
-    ├── scanners/                  # one file per source, all export scan()
-    ├── scripts/                   # CLI entry points, cron-triggered in prod
-    └── components/                # Phase 4+
+    ├── app/
+    │   ├── page.js                # discovery inbox (list candidates)
+    │   ├── candidates/[id]/       # candidate detail + evaluate form
+    │   ├── evaluate/              # ad-hoc niche+metro form
+    │   ├── evaluations/           # eval history + single eval result
+    │   ├── api/evaluate/          # POST endpoint for ad-hoc API submission
+    │   └── actions.js             # server actions (setStatus, evaluateCandidate, evaluateManual)
+    ├── lib/                       # db, http, log, dedupe, claude, normalize, google-places, dataforseo, trends, evaluate, score-discovery, score-evaluation, plan, extract-niches, email
+    ├── scanners/                  # flippa, reddit, indiehackers, niche-pursuits, failory, frey-chu, lead-gen-pricing
+    ├── scripts/                   # test-scanner.js, run-scanners.js, run-discovery-scoring.js
+    └── components/                # CandidateCard, FilterBar, ScoreGauge, ScoreBadge, DimensionBar, CompetitorList, BuildPlan, HistoryTable, StatusActions
 ```
+
+## Evaluation pipeline
+
+Evaluations are **async**: the Evaluate button (server action in `src/app/actions.js`) creates a `dh_evaluations` row with `status='pending'` and immediately redirects. The Railway `run-pending-evaluations` cron picks it up within ~60 seconds via `claimPendingEvaluation` (atomic flip from `pending` to `running`) and runs the pipeline. The result page (`src/app/evaluations/[id]/page.js`) auto-refreshes every 5 seconds via meta-refresh while status is pending or running. This split exists because Vercel Hobby caps server actions at 10 seconds and the pipeline takes 30 to 90.
+
+`runEvaluation(evaluation)` in `src/lib/evaluate.js` runs 7 steps in order against a `dh_evaluations` row already in `pending` state:
+
+1. `normalize` (Sonnet) — canonical niche, primary keyword, variations, cities, country code
+2. `trends` (free) — Google Trends via `google-trends-api`
+3. `google-places` (paid) — Google Maps businesses for top 3 cities
+4. `dataforseo-serp` (paid) — SERP for up to 5 keyword variations in city #1
+5. `dataforseo-keywords` (paid, batched) — keyword volume for the variations
+6. `score-evaluation` (Sonnet) — 6 dimensions, total score, recommendation
+7. `plan` (Sonnet) — build plan, only if total score >= 60
+
+Each step wraps its fetch in `cachedOrFetch(evalId, source, fn)`, which checks `dh_evaluation_data` for a payload from the same source within the last 24 hours before paying. Re-submitting an old eval re-runs Sonnet scoring against cached data with no paid calls. The 24h cache lives at the `dh_evaluation_data` level, not the `dh_evaluations` row.
+
+## Category sampler
+
+`src/scanners/category-sampler.js` is the only paid scanner. Uses Google Places API (New). It is **excluded from the nightly default** and only runs on demand or via the weekly cron.
+
+- Categories live in `data/sampler-categories.json`. Metros in `data/sampler-metros.json`. Edit either freely.
+- Each run picks N categories not sampled in the last 90 days (oldest first), samples 3 random metros each, 30 businesses per metro. Writes a `dh_category_samples` row for every category processed, and a candidate row only when aggregate completeness < 50%.
+- Default `limit` is 5 (safety floor). Cron should pass `--limit=50`. Full weekly run:
+  ```
+  npm run discover -- --only=category-sampler --limit=50
+  ```
+- For a small test first: `npm run discover -- --only=category-sampler --limit=2`
+- Cost: Google Places Pro SKU is $20/1000 results. The first $200/mo of GCP usage is free credit. Full weekly run (~4,500 results) sits in the free tier; the limit=2 test is effectively zero.
+
+## Scanner contract
+
+- Each scanner exports `async scan({ limit?, headless? })` returning rows shaped for `dh_niche_candidates` (minus auto fields like `id`, `found_at`, `discovery_score`, `scored_at`).
+- Required fields per row: `source_id` (must match a row in `dh_discovery_sources`), `source_url`, `source_url_canonical` (set via `lib/dedupe.canonicalUrl()`), `niche_raw`, `raw_context`, `raw_payload`.
+- `niche_canonical` is set later by the Haiku scoring pass, not by the scanner.
+- One scanner can write to multiple sources (reddit writes to 4). `run-scanners.js` marks every distinct `source_id` it sees as scanned.
+- Scanners may catch errors and return `[]` so one broken source does not kill the nightly run, but they must `log.warn` or `log.error` the failure.
+- Lib code (`db.js`, `http.js`, `claude.js`) crashes loud. No swallowed catches.
 
 ## Conventions
 
@@ -93,7 +149,7 @@ All in `.env.example`. Required for each phase:
 - Phase 1 to apply migration: Supabase via the dashboard, not via the app.
 - Phase 2 onward: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANTHROPIC_API_KEY`.
 - Phase 3 (Reddit): `REDDIT_USERNAME` for the User-Agent string.
-- Phase 5: `OUTSCRAPER_API_KEY`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, `DATAFORSEO_SANDBOX`.
+- Phase 5: `GOOGLE_PLACES_API_KEY`, `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, `DATAFORSEO_SANDBOX`.
 - Phase 6: `RESEND_API_KEY`, `DIGEST_RECIPIENT_EMAIL`, `APP_BASE_URL`.
 
 ## When in doubt

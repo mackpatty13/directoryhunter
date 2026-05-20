@@ -9,7 +9,7 @@ const SYSTEM = [
   'No em-dashes, no AI-slop language (banned: dive, leverage, robust, seamless, delve, embark, unleash, empower, harness).'
 ].join(' ');
 
-function buildPrompt({ normalized, scoring, outscraper, serps, keywordVolumes }) {
+function buildPrompt({ normalized, scoring, places, serps, keywordVolumes }) {
   return `You are generating a 30-day action plan for Patrick to build a directory site.
 
 Niche: ${normalized.canonical_niche}
@@ -21,8 +21,8 @@ Dimension scores: ${JSON.stringify(scoring.dimensions.map(d => ({ d: d.dimension
 Top SERP competitors (across keyword variations):
 ${JSON.stringify(serps.flatMap(s => (s.organic_top10 ?? []).slice(0, 5).map(o => ({ keyword: s.keyword, rank: o.rank, domain: o.domain, title: o.title }))).slice(0, 20), null, 2)}
 
-Outscraper data summary:
-${JSON.stringify(outscraper.map(c => ({ city: c.city, count: c.businesses?.length ?? 0, completeness: c.completeness?.rate })), null, 2)}
+Google Maps data summary:
+${JSON.stringify(places.map(c => ({ city: c.city, count: c.businesses?.length ?? 0, completeness: c.completeness?.rate })), null, 2)}
 
 Keyword volume:
 ${JSON.stringify(keywordVolumes, null, 2)}
@@ -30,7 +30,7 @@ ${JSON.stringify(keywordVolumes, null, 2)}
 Patrick's context:
 - Self-taught builder on Next.js + Supabase + Vercel + Playwright
 - Already builds scrapers and programmatic pages
-- Uses Outscraper for data, Mediavine/Ezoic for ads if traffic justifies
+- Uses Google Places API for data, Mediavine/Ezoic for ads if traffic justifies
 - DFW-based, ~10 hours/week side capacity
 - Frey Chu playbook: boring + local + buyer intent
 

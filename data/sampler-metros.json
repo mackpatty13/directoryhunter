@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "description": "US mid-sized metros (roughly 300k to 1.5M MSA population) used by the Google Maps category sampler. The sampler picks 3 random metros per category per run. Geographic diversity matters more than perfect population match. Edit freely.",
+    "selection_rules": [
+      "Skip the saturated top 10 (NYC, LA, Chicago, etc.) where Yelp/Angi dominate",
+      "Skip small towns where there isn't enough business volume to evaluate completeness",
+      "Spread across regions so we don't bias toward one part of the country"
+    ]
+  },
+  "metros": [
+    "Tucson, AZ",
+    "Albuquerque, NM",
+    "El Paso, TX",
+    "Boise, ID",
+    "Spokane, WA",
+    "Reno, NV",
+    "Fresno, CA",
+    "Bakersfield, CA",
+    "Tulsa, OK",
+    "Oklahoma City, OK",
+    "Wichita, KS",
+    "Omaha, NE",
+    "Des Moines, IA",
+    "Madison, WI",
+    "Grand Rapids, MI",
+    "Louisville, KY",
+    "Lexington, KY",
+    "Knoxville, TN",
+    "Chattanooga, TN",
+    "Birmingham, AL",
+    "Baton Rouge, LA",
+    "Little Rock, AR",
+    "Greensboro, NC",
+    "Columbia, SC",
+    "Charleston, SC",
+    "Richmond, VA",
+    "Pittsburgh, PA",
+    "Cincinnati, OH",
+    "Rochester, NY",
+    "Providence, RI"
+  ]
+}

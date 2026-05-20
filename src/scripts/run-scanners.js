@@ -19,13 +19,20 @@ const ALL_SCANNERS = [
   'failory',
   'frey-chu',
   'lead-gen-pricing'
-  // 'outscraper-categories' is paid and lives in Phase 6.
+  // 'category-sampler' is paid (Google Places API; covered by GCP's $200/mo
+  // free credit at our scale). Deliberately excluded from the nightly default.
+  // Run it weekly via:
+  //   npm run discover -- --only=category-sampler --limit=50
 ];
 
 const args = process.argv.slice(2);
 const onlyArg = args.find(a => a.startsWith('--only='))?.split('=')[1];
 const skipArg = args.find(a => a.startsWith('--skip='))?.split('=')[1];
+const limitArg = args.find(a => a.startsWith('--limit='))?.split('=')[1];
 const skipScoring = args.includes('--no-score');
+
+const limit = limitArg ? parseInt(limitArg, 10) : null;
+const scannerOpts = Number.isFinite(limit) ? { limit } : {};
 
 let toRun = onlyArg ? onlyArg.split(',') : ALL_SCANNERS;
 if (skipArg) {
@@ -33,7 +40,7 @@ if (skipArg) {
   toRun = toRun.filter(s => !skip.has(s));
 }
 
-log.info('run-scanners starting', { scanners: toRun, skipScoring });
+log.info('run-scanners starting', { scanners: toRun, skipScoring, scannerOpts });
 
 const summary = {};
 const t0 = Date.now();
@@ -51,7 +58,7 @@ for (const name of toRun) {
 
   let results = [];
   try {
-    results = await mod.scan({});
+    results = await mod.scan(scannerOpts);
   } catch (err) {
     log.error('run-scanners: scanner threw', { name, error: err.message });
     summary[name] = { ok: false, error: err.message };

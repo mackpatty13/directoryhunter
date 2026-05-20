@@ -1,6 +1,6 @@
 # Evaluation rubric
 
-Runs only when Patrick clicks Evaluate on a candidate, or when he manually enters a niche plus metro. Uses Outscraper plus DataforSEO plus Google Trends plus Claude Sonnet (`claude-sonnet-4-6`).
+Runs only when Patrick clicks Evaluate on a candidate, or when he manually enters a niche plus metro. Uses Google Places API plus DataforSEO plus Google Trends plus Claude Sonnet (`claude-sonnet-4-6`).
 
 Score across 6 dimensions, weighted, total max 100.
 
@@ -56,12 +56,12 @@ Metro: {metro}
 Total score: {score}/100
 Dimension scores: {dimension_scores}
 Top 5 SERP competitors: {competitors_with_da}
-Outscraper data summary: {summary}
+Google Maps data summary: {summary}
 
 Patrick's context:
 - Self-taught builder on Next.js + Supabase + Vercel + Playwright
 - Already builds scrapers and programmatic pages
-- Uses Outscraper for data, Mediavine/Ezoic for ads if traffic justifies
+- Uses Google Places API for data, Mediavine/Ezoic for ads if traffic justifies
 - DFW-based, ~10 hours/week side capacity
 - Frey Chu playbook: boring + local + buyer intent
 
