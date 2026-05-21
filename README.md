@@ -79,13 +79,15 @@ Migrations live in `db/migrations/`. Run them manually in the Supabase SQL edito
 
 Built in phases. Each phase stops for review before the next starts.
 
-1. Skeleton, DB schema, first scanner, test-scanner script. (in progress)
-2. Storage wiring, Haiku scoring.
-3. Remaining scanners.
-4. Discovery UI.
-5. Evaluation pipeline and UI.
-6. Google Maps category sampler, weekly digest email.
-7. Deploy to Vercel and Railway.
+1. Skeleton, DB schema, first scanner, test-scanner script. **(done)**
+2. Storage wiring, Haiku scoring. **(done)**
+3. Remaining scanners. **(done)**
+4. Discovery UI. **(done)**
+5. Evaluation pipeline and UI. **(done)**
+6. Google Maps category sampler, weekly digest email. **(done)**
+7. Deploy to Vercel and Railway. **(in progress)**
+
+Live at https://directoryhunter.vercel.app (Vercel Hobby). Railway cron setup pending.
 
 ## House rules
 

@@ -40,10 +40,16 @@ The canonical spec is `directory-hunter-discovery-kickoff.md` at the repo root. 
 3. Remaining scanners (reddit, indiehackers, niche-pursuits, failory, frey-chu blog+YouTube, lead-gen-pricing). **(done)**
 4. Discovery UI (inbox, candidate detail, filters). **(done)**
 5. Evaluation pipeline + UI (normalize, Google Places, DataforSEO, Trends, Sonnet scoring, build plan). **(done)**
-6. Google Maps category sampler + Sunday digest email.
-7. Deploy to Vercel + Railway cron.
+6. Google Maps category sampler + Sunday digest email. **(done)**
+7. Deploy to Vercel + Railway cron. **(in progress: code refactored to async, Vercel live at https://directoryhunter.vercel.app, Railway cron setup pending)**
 
 Do not start a phase until the previous one is confirmed.
+
+## Deployment state (2026-05-19)
+
+- **Vercel** is live at https://directoryhunter.vercel.app on the Hobby plan. The only env vars set there are `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`, because the web app only reads/writes Supabase. All paid-API keys live on Railway.
+- **Railway** services are NOT yet configured. Until they are, the four background jobs (nightly discovery scan, weekly category sampler, Sunday digest, per-minute eval worker) only run when Patrick triggers them manually via npm scripts on his laptop. The shared Supabase DB means manual local runs still surface in the live site.
+- **Vercel Hobby's 10-second server-action cap** is why the Evaluate flow is async (insert pending row, redirect, meta-refresh until the worker completes it). Any new server action must also fit in 10 seconds or follow the same async pattern.
 
 ## Commands
 
