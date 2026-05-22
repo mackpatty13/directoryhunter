@@ -9,6 +9,7 @@ import {
 import { ScoreGauge } from '../../../components/ScoreGauge.jsx';
 import { DimensionBar } from '../../../components/DimensionBar.jsx';
 import { BuildPlan } from '../../../components/BuildPlan.jsx';
+import { rerunEvaluation } from '../../actions.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,21 @@ export default async function EvaluationDetail({ params }) {
       {stillRunning && <meta httpEquiv="refresh" content="5" />}
       <header className="flex items-center justify-between mono text-sm">
         <Link href="/evaluations" className="text-ink-400 hover:text-ink-100">← evaluation history</Link>
-        <span className="text-ink-500 truncate max-w-md">{evalRow.id}</span>
+        <div className="flex items-center gap-4">
+          {!stillRunning && (
+            <form action={rerunEvaluation}>
+              <input type="hidden" name="evaluation_id" value={evalRow.id} />
+              <button
+                type="submit"
+                className="mono text-[11px] uppercase tracking-wider px-2 h-6 border border-emerald-500 text-emerald-300 hover:bg-emerald-900/30"
+                title="Create a new evaluation with the same niche + metro. Uses fresh API calls; the original row stays for comparison."
+              >
+                re-run with fresh data
+              </button>
+            </form>
+          )}
+          <span className="text-ink-500 truncate max-w-md">{evalRow.id}</span>
+        </div>
       </header>
 
       <section className="space-y-4">

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createEvaluation, getCandidateById, updateCandidateStatus } from '../lib/db.js';
+import { createEvaluation, getCandidateById, getEvaluation, updateCandidateStatus } from '../lib/db.js';
 
 export async function setStatus(formData) {
   const id = formData.get('id');
@@ -30,6 +30,26 @@ export async function evaluateCandidate(formData) {
   revalidatePath('/');
   revalidatePath(`/candidates/${candidateId}`);
   revalidatePath('/evaluations');
+  redirect(`/evaluations/${evaluation.id}`);
+}
+
+// Submitted from the eval detail page. Copies niche + metro + candidate_id
+// from an existing evaluation and creates a new pending row, leaving the
+// original row in place for comparison.
+export async function rerunEvaluation(formData) {
+  const sourceId = formData.get('evaluation_id');
+  if (!sourceId) throw new Error('evaluation_id is required');
+
+  const source = await getEvaluation(sourceId);
+  if (!source) throw new Error(`evaluation ${sourceId} not found`);
+
+  const evaluation = await createEvaluation({
+    niche: source.niche,
+    metro: source.metro,
+    candidateId: source.candidate_id
+  });
+  revalidatePath('/evaluations');
+  if (source.candidate_id) revalidatePath(`/candidates/${source.candidate_id}`);
   redirect(`/evaluations/${evaluation.id}`);
 }
 
