@@ -188,22 +188,25 @@ export async function updateCandidateStatus(id, status) {
 // dh_evaluation_data level (saveEvaluationData / cachedOrFetch in evaluate.js),
 // not here, so re-submitting an old eval re-runs scoring against cached source
 // data and rewrites dimension scores + plan in place.
-export async function createEvaluation({ niche, metro, candidateId = null }) {
+export async function createEvaluation({ niche, metro, candidateId = null, force = false }) {
   const supabase = db();
-  const lowerNiche = niche.trim().toLowerCase();
-  const lowerMetro = metro.trim().toLowerCase();
 
-  const { data: existing, error: lookupErr } = await supabase
-    .from(T.evaluations)
-    .select('*')
-    .ilike('niche', niche.trim())
-    .ilike('metro', metro.trim())
-    .neq('status', 'failed')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (lookupErr) throw new Error(`createEvaluation lookup failed: ${lookupErr.message}`);
-  if (existing) return existing;
+  // Default: reuse an existing non-failed eval for the same niche+metro to
+  // avoid accidental duplicates. force=true bypasses dedupe for explicit
+  // re-runs from the UI.
+  if (!force) {
+    const { data: existing, error: lookupErr } = await supabase
+      .from(T.evaluations)
+      .select('*')
+      .ilike('niche', niche.trim())
+      .ilike('metro', metro.trim())
+      .neq('status', 'failed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lookupErr) throw new Error(`createEvaluation lookup failed: ${lookupErr.message}`);
+    if (existing) return existing;
+  }
 
   const { data, error } = await supabase
     .from(T.evaluations)

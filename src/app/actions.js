@@ -46,7 +46,8 @@ export async function rerunEvaluation(formData) {
   const evaluation = await createEvaluation({
     niche: source.niche,
     metro: source.metro,
-    candidateId: source.candidate_id
+    candidateId: source.candidate_id,
+    force: true
   });
   revalidatePath('/evaluations');
   if (source.candidate_id) revalidatePath(`/candidates/${source.candidate_id}`);
