@@ -21,7 +21,12 @@ export function db() {
   const url = requireEnv('SUPABASE_URL');
   const key = requireEnv('SUPABASE_SERVICE_KEY');
   _client = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false }
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      // Next.js 14 patches global fetch to cache by default; supabase-js
+      // doesn't opt out, so eval detail page kept serving stale 'pending'.
+      fetch: (input, init = {}) => fetch(input, { ...init, cache: 'no-store' })
+    }
   });
   return _client;
 }
