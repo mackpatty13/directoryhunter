@@ -27,7 +27,7 @@ The goal: open the tool Monday morning and see fifteen niches worth considering 
 
 ## Local setup
 
-Requires Node 20.6 or newer (we use `node --env-file` flag, no `dotenv` dependency).
+Requires Node 22 or newer. Supabase's client needs native WebSocket, which Node 20 lacks; Node 22 has it built in.
 
 ```bash
 npm install
@@ -52,7 +52,7 @@ npm run test:scanner -- acquire
 
 ## Database
 
-Migrations live in `db/migrations/`. Run them manually in the Supabase SQL editor. Phase 1 ships `0001_initial.sql`.
+Migrations live in `db/migrations/`. Run them manually in the Supabase SQL editor. Current set: `0001_initial.sql`, `0002_category_samples.sql`, `0003_rename_category_source.sql`, `0004_drop_eval_dedupe_index.sql`.
 
 ## Repository layout
 
@@ -85,9 +85,9 @@ Built in phases. Each phase stops for review before the next starts.
 4. Discovery UI. **(done)**
 5. Evaluation pipeline and UI. **(done)**
 6. Google Maps category sampler, weekly digest email. **(done)**
-7. Deploy to Vercel and Railway. **(in progress)**
+7. Deploy to Vercel and Railway. **(done)**
 
-Live at https://directoryhunter.vercel.app (Vercel Hobby). Railway cron setup pending.
+Live at https://directoryhunter.vercel.app (Vercel Hobby). Railway project `directory-hunter` runs four services: `eval-worker` (always-on, polls every 60s), `nightly-discovery`, `weekly-sampler`, `weekly-digest`.
 
 ## House rules
 

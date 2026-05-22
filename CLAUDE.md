@@ -41,15 +41,23 @@ The canonical spec is `directory-hunter-discovery-kickoff.md` at the repo root. 
 4. Discovery UI (inbox, candidate detail, filters). **(done)**
 5. Evaluation pipeline + UI (normalize, Google Places, DataforSEO, Trends, Sonnet scoring, build plan). **(done)**
 6. Google Maps category sampler + Sunday digest email. **(done)**
-7. Deploy to Vercel + Railway cron. **(in progress: code refactored to async, Vercel live at https://directoryhunter.vercel.app, Railway cron setup pending)**
+7. Deploy to Vercel + Railway. **(done 2026-05-21)**
 
 Do not start a phase until the previous one is confirmed.
 
-## Deployment state (2026-05-19)
+## Deployment state (2026-05-21)
 
 - **Vercel** is live at https://directoryhunter.vercel.app on the Hobby plan. The only env vars set there are `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`, because the web app only reads/writes Supabase. All paid-API keys live on Railway.
-- **Railway** services are NOT yet configured. Until they are, the four background jobs (nightly discovery scan, weekly category sampler, Sunday digest, per-minute eval worker) only run when Patrick triggers them manually via npm scripts on his laptop. The shared Supabase DB means manual local runs still surface in the live site.
+- **Railway** project `directory-hunter` runs four services, all pointing at the same GitHub repo with per-service start commands:
+  1. `eval-worker` — always-on (no cron), start cmd `sh -c 'while true; do npm run eval:pending; sleep 60; done'`. Always-on instead of a cron because Railway's minimum cron interval is 5 minutes and we want sub-minute pickup of pending evals.
+  2. `nightly-discovery` — cron `0 6 * * *` UTC, start cmd `npm run discover && npm run score:discovery`.
+  3. `weekly-sampler` — cron `0 8 * * 0` UTC, start cmd `npm run discover -- --only=category-sampler --limit=50`.
+  4. `weekly-digest` — cron `0 13 * * 0` UTC, start cmd `npm run digest`.
+- The four Railway services have the **same env-var set** (Supabase, Anthropic, Google Places, DataforSEO, Resend, Reddit username, APP_BASE_URL). Use the `variableCollectionUpsert` GraphQL mutation to keep them in sync.
+- **Cron services do NOT auto-rebuild on GitHub push.** Only the always-on `eval-worker` rebuilds automatically. After pushing code changes, force-redeploy the three cron services with `serviceInstanceDeployV2` or they'll keep running the previous image until their cron fires.
 - **Vercel Hobby's 10-second server-action cap** is why the Evaluate flow is async (insert pending row, redirect, meta-refresh until the worker completes it). Any new server action must also fit in 10 seconds or follow the same async pattern.
+- **Node 22 is required.** `engines.node` is `>=22.0.0`. Supabase's client requires native WebSocket support that Node 20 lacks. Railway's Nixpacks defaults to Node 20.20.2, so without this pin the worker crashes at `createClient`.
+- **Supabase client has `cache: 'no-store'` set on its fetch.** Next.js 14 App Router patches global fetch to cache by default, and `export const dynamic = 'force-dynamic'` doesn't reliably disable it for supabase-js calls. Without no-store, the eval detail page kept serving the cached `pending` HTML even after the worker flipped the row to `complete`. See `src/lib/db.js`.
 
 ## Commands
 
@@ -59,9 +67,11 @@ Do not start a phase until the previous one is confirmed.
 - `npm run discover` — run all scanners then the Haiku scoring pass. Flags: `--only=flippa`, `--skip=reddit,frey-chu`, `--no-score`, `--limit=N` (passes through to scanners; only meaningful with `--only`)
 - `npm run score:discovery` — score unscored candidates only (no scanning)
 - `npm run digest` — build and send the Sunday digest. Flags: `--dry-run` (print body, no send), `--to=other@example.com` (override recipient)
-- `npm run eval:pending` — claim and run one pending evaluation, then exit. This is what Railway invokes once a minute. Runs nothing if no pending evals.
+- `npm run eval:pending` — claim and run one pending evaluation, then exit. The Railway `eval-worker` service loops this every 60 seconds (always-on, not a cron). Runs nothing if no pending evals.
 
-After `npm install`, also run `npx playwright install chromium`. Apply DB migrations manually in the Supabase SQL editor (`db/migrations/0001_initial.sql`).
+After `npm install`, also run `npx playwright install chromium`. Apply DB migrations manually in the Supabase SQL editor. Current migrations: `0001_initial.sql`, `0002_category_samples.sql`, `0003_rename_category_source.sql`, `0004_drop_eval_dedupe_index.sql`.
+
+Scripts use `--env-file-if-exists=.env.local` so the same command works locally (loads `.env.local`) and on Railway (uses injected env vars, no file).
 
 ## Database table naming
 
@@ -91,7 +101,7 @@ JS code reads table names from `T` exported by `src/lib/db.js`. Use `T.candidate
     │   ├── evaluate/              # ad-hoc niche+metro form
     │   ├── evaluations/           # eval history + single eval result
     │   ├── api/evaluate/          # POST endpoint for ad-hoc API submission
-    │   └── actions.js             # server actions (setStatus, evaluateCandidate, evaluateManual)
+    │   └── actions.js             # server actions (setStatus, evaluateCandidate, rerunEvaluation, evaluateManual)
     ├── lib/                       # db, http, log, dedupe, claude, normalize, google-places, dataforseo, trends, evaluate, score-discovery, score-evaluation, plan, extract-niches, email
     ├── scanners/                  # flippa, reddit, indiehackers, niche-pursuits, failory, frey-chu, lead-gen-pricing
     ├── scripts/                   # test-scanner.js, run-scanners.js, run-discovery-scoring.js
@@ -100,7 +110,7 @@ JS code reads table names from `T` exported by `src/lib/db.js`. Use `T.candidate
 
 ## Evaluation pipeline
 
-Evaluations are **async**: the Evaluate button (server action in `src/app/actions.js`) creates a `dh_evaluations` row with `status='pending'` and immediately redirects. The Railway `run-pending-evaluations` cron picks it up within ~60 seconds via `claimPendingEvaluation` (atomic flip from `pending` to `running`) and runs the pipeline. The result page (`src/app/evaluations/[id]/page.js`) auto-refreshes every 5 seconds via meta-refresh while status is pending or running. This split exists because Vercel Hobby caps server actions at 10 seconds and the pipeline takes 30 to 90.
+Evaluations are **async**: the Evaluate button (server action in `src/app/actions.js`) creates a `dh_evaluations` row with `status='pending'` and immediately redirects. The Railway `eval-worker` service picks it up within ~60 seconds via `claimPendingEvaluation` (atomic flip from `pending` to `running`) and runs the pipeline. The result page (`src/app/evaluations/[id]/page.js`) auto-refreshes every 5 seconds via meta-refresh while status is pending or running, plus has a re-run button (with editable metro) that creates a fresh evaluation against the same niche. This split exists because Vercel Hobby caps server actions at 10 seconds and the pipeline takes 30 to 90.
 
 `runEvaluation(evaluation)` in `src/lib/evaluate.js` runs 7 steps in order against a `dh_evaluations` row already in `pending` state:
 
@@ -113,6 +123,14 @@ Evaluations are **async**: the Evaluate button (server action in `src/app/action
 7. `plan` (Sonnet) — build plan, only if total score >= 60
 
 Each step wraps its fetch in `cachedOrFetch(evalId, source, fn)`, which checks `dh_evaluation_data` for a payload from the same source within the last 24 hours before paying. Re-submitting an old eval re-runs Sonnet scoring against cached data with no paid calls. The 24h cache lives at the `dh_evaluation_data` level, not the `dh_evaluations` row.
+
+**DataforSEO gotchas (learned the hard way):**
+- `location_name` must be the FULL state name, not the abbreviation: `Dallas,Texas,United States` works; `Dallas,TX,United States` and `Dallas,United States` both return 40501 Invalid Field. `src/lib/dataforseo.js` has a US-state-abbreviation map.
+- Sandbox (`DATAFORSEO_SANDBOX=true`) accepts ANY garbage location format and silently returns dummy data. Always test prod against at least one real city before trusting eval scores.
+- The top-level `status_code: 20000` only means the request was accepted. Each task has its own `status_code`. `post()` in `dataforseo.js` checks both. Don't add new endpoint wrappers that skip the task-level check.
+- New DataforSEO accounts may get fraud-locked after a small burst of requests. Email `support@dataforseo.com` with your account email to unlock.
+
+**Re-run button:** the eval detail page has a re-run form (editable metro). `rerunEvaluation` in `actions.js` calls `createEvaluation({ ..., force: true })` to bypass the app-level dedupe. Migration 0004 dropped the matching DB unique index so multiple evals per niche+metro can co-exist.
 
 ## Category sampler
 
@@ -141,7 +159,7 @@ Each step wraps its fetch in `cachedOrFetch(evalId, source, fn)`, which checks `
 - Every scanner exports `async function scan(options)` returning an array of candidate objects matching the `niche_candidates` insert shape minus auto fields.
 - `source_url_canonical` is computed by `lib/dedupe.canonicalUrl()` before insert.
 - `niche_canonical` is set by Claude Haiku during the discovery scoring pass, not by the scanner.
-- Scripts load env via `node --env-file=.env.local` (Node 20.6+). No `dotenv` package.
+- Scripts load env via `node --env-file-if-exists=.env.local` so the same command works locally and on Railway (where there's no .env.local). Node 22+ required.
 - Logging goes through `lib/log.js`. Do not call `console.log` directly in lib or scanners.
 - HTTP requests go through `lib/http.js`. It enforces User-Agent and throttling.
 - Anthropic calls go through `lib/claude.js`. It exposes `haiku()` and `sonnet()` helpers and validates JSON output against a schema when one is passed.
