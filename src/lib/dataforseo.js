@@ -22,9 +22,10 @@ function baseUrl() {
     : 'https://api.dataforseo.com/v3';
 }
 
-// DataforSEO `location_name` expects "City,Country" or "City,FullState,Country".
-// Our normalize step emits "Dallas, TX" style strings; the API rejects abbreviated
-// states with the comma-space layout, so we drop the state and use "City,Country".
+// DataforSEO `location_name` requires the full state name, not the abbreviation:
+// "Dallas,Texas,United States" works; "Dallas,TX,United States" and
+// "Dallas,United States" both return 40501 Invalid Field. Our normalize step
+// emits "Dallas, TX" style strings, so we expand the state abbreviation here.
 const COUNTRY_NAMES = {
   US: 'United States',
   CA: 'Canada',
@@ -34,11 +35,32 @@ const COUNTRY_NAMES = {
   NZ: 'New Zealand'
 };
 
+const US_STATES = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia',
+  FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',
+  IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana',
+  ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota',
+  MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada',
+  NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York',
+  NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon',
+  PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota',
+  TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia',
+  WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming'
+};
+
 export function formatLocation(cityName, countryCode = 'US') {
   const code = (countryCode || 'US').toString().toUpperCase();
   const country = COUNTRY_NAMES[code] || 'United States';
-  const city = (cityName || '').toString().split(',')[0].trim();
-  return city ? `${city},${country}` : country;
+  const raw = (cityName || '').toString().trim();
+  if (!raw) return country;
+  // Accept "Dallas, TX" or "Dallas,TX" or just "Dallas"
+  const [cityPart, statePart] = raw.split(',').map(s => s.trim());
+  const city = cityPart;
+  if (code === 'US' && statePart && US_STATES[statePart.toUpperCase()]) {
+    return `${city},${US_STATES[statePart.toUpperCase()]},${country}`;
+  }
+  return `${city},${country}`;
 }
 
 function authHeader() {
@@ -64,7 +86,14 @@ async function post(path, body) {
   if (json.status_code !== 20000) {
     throw new Error(`dataforseo ${path} error: ${json.status_message}`);
   }
-  return json.tasks?.[0]?.result ?? [];
+  // Top-level 20000 just means the request was accepted; each task has its
+  // own status_code. Surface task-level failures (e.g. 40501 Invalid Field)
+  // so they don't silently degrade to empty results.
+  const task = json.tasks?.[0];
+  if (task && task.status_code !== 20000) {
+    throw new Error(`dataforseo ${path} task error ${task.status_code}: ${task.status_message}`);
+  }
+  return task?.result ?? [];
 }
 
 // "live/regular" returns Google organic SERP for the keyword in the location.
