@@ -54,14 +54,22 @@ export default async function EvaluationDetail({ params }) {
         <Link href="/evaluations" className="text-ink-400 hover:text-ink-100">← evaluation history</Link>
         <div className="flex items-center gap-4">
           {!stillRunning && (
-            <form action={rerunEvaluation}>
+            <form action={rerunEvaluation} className="flex items-center gap-1">
               <input type="hidden" name="evaluation_id" value={evalRow.id} />
+              <input
+                type="text"
+                name="metro"
+                defaultValue={evalRow.metro}
+                placeholder="metro"
+                className="mono text-[11px] uppercase tracking-wider px-2 h-6 w-28 bg-ink-900 border border-ink-600 text-ink-100 focus:outline-none focus:border-emerald-500"
+                title="Edit to re-run in a different city (e.g. phoenix, houston, national)"
+              />
               <button
                 type="submit"
                 className="mono text-[11px] uppercase tracking-wider px-2 h-6 border border-emerald-500 text-emerald-300 hover:bg-emerald-900/30"
-                title="Create a new evaluation with the same niche + metro. Uses fresh API calls; the original row stays for comparison."
+                title="Create a new evaluation. Edit the metro above to try a different city."
               >
-                re-run with fresh data
+                re-run
               </button>
             </form>
           )}

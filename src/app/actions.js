@@ -33,9 +33,10 @@ export async function evaluateCandidate(formData) {
   redirect(`/evaluations/${evaluation.id}`);
 }
 
-// Submitted from the eval detail page. Copies niche + metro + candidate_id
-// from an existing evaluation and creates a new pending row, leaving the
-// original row in place for comparison.
+// Submitted from the eval detail page. Copies niche + candidate_id from an
+// existing evaluation and creates a new pending row. Metro can be overridden
+// via the form (e.g. to re-run the same niche in a different city); falls
+// back to the source eval's metro if blank. Original row stays for comparison.
 export async function rerunEvaluation(formData) {
   const sourceId = formData.get('evaluation_id');
   if (!sourceId) throw new Error('evaluation_id is required');
@@ -43,9 +44,12 @@ export async function rerunEvaluation(formData) {
   const source = await getEvaluation(sourceId);
   if (!source) throw new Error(`evaluation ${sourceId} not found`);
 
+  const overrideMetro = (formData.get('metro') || '').toString().trim();
+  const metro = overrideMetro || source.metro;
+
   const evaluation = await createEvaluation({
     niche: source.niche,
-    metro: source.metro,
+    metro,
     candidateId: source.candidate_id,
     force: true
   });
