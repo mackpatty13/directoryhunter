@@ -2,7 +2,7 @@
 // Filters to sitetype=directory and pulls public listing cards.
 // No login required. Discovery category: proven_winner.
 
-import { chromium } from 'playwright';
+import { launchBrowser } from '../lib/browser.js';
 import { canonicalUrl, parseRevenueUsdMonthly } from '../lib/dedupe.js';
 import { log } from '../lib/log.js';
 
@@ -51,7 +51,7 @@ function parseDescription(text, title) {
 }
 
 export async function scan({ limit = 100, headless = true } = {}) {
-  const browser = await chromium.launch({ headless });
+  const browser = await launchBrowser({ headless });
   const ctx = await browser.newContext({
     userAgent: USER_AGENT,
     viewport: { width: 1440, height: 900 }

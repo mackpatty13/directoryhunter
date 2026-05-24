@@ -5,7 +5,7 @@
 // does not claim he has built it.
 
 import * as cheerio from 'cheerio';
-import { chromium } from 'playwright';
+import { launchBrowser } from '../lib/browser.js';
 import { YoutubeTranscript } from 'youtube-transcript';
 import { httpGetText } from '../lib/http.js';
 import { canonicalUrl, parseRevenueUsdMonthly } from '../lib/dedupe.js';
@@ -91,7 +91,7 @@ async function scanYouTube({ maxVideos }) {
 
   // Get the recent video list by navigating the channel page with Playwright.
   // YouTube heavily lazy-loads; we scroll twice to surface ~30-40 thumbnails.
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchBrowser({ headless: true });
   const ctx = await browser.newContext({ userAgent: USER_AGENT, viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
   try {

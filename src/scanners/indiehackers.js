@@ -2,7 +2,7 @@
 // keywords in title/tagline. Discovery category: revenue_mention (IH products
 // page only shows revenue-verified products by design here).
 
-import { chromium } from 'playwright';
+import { launchBrowser } from '../lib/browser.js';
 import { canonicalUrl, parseRevenueUsdMonthly } from '../lib/dedupe.js';
 import { log } from '../lib/log.js';
 
@@ -13,7 +13,7 @@ const USER_AGENT = 'directory-hunter/1.0 (+https://buildmyblast.com)';
 const KEYWORDS = /\b(director(?:y|ies)|listings|marketplace|finder|near me|local\s+lead|lead\s+gen|local\s+seo|local\s+business)\b/i;
 
 export async function scan({ limit = 100, headless = true, maxCards = 80 } = {}) {
-  const browser = await chromium.launch({ headless });
+  const browser = await launchBrowser({ headless });
   const ctx = await browser.newContext({ userAgent: USER_AGENT, viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
 
