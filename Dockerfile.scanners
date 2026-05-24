@@ -1,0 +1,30 @@
+# Build image for the Railway "nightly-discovery" service ONLY (wired up via
+# that service's dockerfilePath setting). It needs Chromium for the Playwright
+# scanners (flippa, indiehackers, frey-chu). Railway's default Railpack builder
+# is Nix-based and cannot apt-install Chromium's system libraries
+# (libglib-2.0.so.0, libnss3, ...), so the browser crashed at launch. Building
+# on Debian (bookworm) lets `playwright install --with-deps` apt-install them
+# into standard paths where Chromium finds them.
+#
+# Named "Dockerfile.scanners" (not "Dockerfile") on purpose: Railway only auto-
+# detects a root file named exactly "Dockerfile", so eval-worker, weekly-sampler
+# and weekly-digest keep building on Railpack, untouched.
+
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+# Install JS deps without lifecycle scripts. This skips Playwright's own browser
+# download; we do it explicitly below together with the OS libraries.
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+
+# App source.
+COPY . .
+
+# Chromium plus the apt-installed system libraries it needs at runtime.
+RUN npx playwright install --with-deps chromium
+
+# Railway overrides this with the service's own start command
+# (npm run discover && npm run score:discovery).
+CMD ["npm", "run", "discover"]
